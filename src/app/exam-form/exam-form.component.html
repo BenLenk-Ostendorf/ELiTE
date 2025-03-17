@@ -1,0 +1,30 @@
+<p>exam-form works!</p>
+
+<div class="exam-form-container">
+  <form class="exam-form" (ngSubmit)="rateYourself()">
+    <div class="form-group">
+      <label for="examQuestion">Exam Question:</label>
+      <textarea id="examQuestion" rows="4" class="form-control" placeholder="Enter your exam question here..." [(ngModel)]="examQuestion" name="examQuestion"></textarea>
+    </div>
+    
+    <div class="button-group">
+      <button type="submit" class="btn btn-primary" [disabled]="isLoading">
+        <span *ngIf="!isLoading">Rate yourself</span>
+        <span *ngIf="isLoading">Processing...</span>
+      </button>
+      <button type="button" class="btn btn-secondary" disabled>Multiple choice</button>
+      <button type="button" class="btn btn-secondary" disabled>Keyword check</button>
+    </div>
+    
+    <div *ngIf="errorMessage" class="error-message mt-3">
+      {{ errorMessage }}
+    </div>
+    
+    <div *ngIf="aiResponse" class="ai-response mt-4">
+      <h3>AI Evaluation:</h3>
+      <div class="response-content">
+        {{ aiResponse }}
+      </div>
+    </div>
+  </form>
+</div>
