@@ -1,3 +1,19 @@
-<app-exam-form></app-exam-form>
+<div class="container">
+  <div *ngIf="initError" class="init-error-container">
+    <div class="init-error">
+      <h3>Initialization Error</h3>
+      <p>{{ initError }}</p>
+      <p class="help-text">
+        Please check your API key and try refreshing the page. If the problem persists, contact support.
+      </p>
+    </div>
+  </div>
+
+  <app-exam-form *ngIf="isInitialized"></app-exam-form>
+  
+  <div *ngIf="!isInitialized && !initError" class="loading-container">
+    <p>Initializing AI services...</p>
+  </div>
+</div>
 
 <router-outlet />

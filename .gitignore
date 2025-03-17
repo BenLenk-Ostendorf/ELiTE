@@ -43,4 +43,5 @@ Thumbs.db
 
 # keys
 /environments/keys/*
+/src/assets/keys/*
 *.key

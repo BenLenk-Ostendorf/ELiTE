@@ -1,13 +1,15 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Observable, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { HttpClient, HttpHeaders, HttpErrorResponse } from '@angular/common/http';
+import { Observable, throwError, timer } from 'rxjs';
+import { catchError, map, retryWhen, mergeMap, finalize, delay } from 'rxjs/operators';
 
 export interface AIServiceConfig {
   apiUrl: string;
   apiKey: string;
   model: string;
   headers?: HttpHeaders;
+  maxRetries?: number;
+  retryDelay?: number;
 }
 
 export interface AIRequest {
@@ -35,6 +37,10 @@ export class AIService {
    * @param config The configuration for the service
    */
   registerService(serviceName: string, config: AIServiceConfig): void {
+    // Set default values for retry configuration
+    if (!config.maxRetries) config.maxRetries = 3;
+    if (!config.retryDelay) config.retryDelay = 1000; // 1 second
+    
     this.configs.set(serviceName, config);
   }
 
@@ -57,6 +63,8 @@ export class AIService {
     switch (serviceName) {
       case 'openai':
         requestBody = this.formatOpenAIRequest(request, config);
+        console.log(`Sending request to ${config.apiUrl}:`, requestBody);
+        console.log('Using headers:', config.headers);
         break;
       // Add cases for other AI services as needed
       default:
@@ -65,13 +73,61 @@ export class AIService {
 
     return this.http.post<any>(config.apiUrl, requestBody, { headers: config.headers })
       .pipe(
+        retryWhen(errors => 
+          errors.pipe(
+            mergeMap((error, i) => {
+              const retryAttempt = i + 1;
+              
+              // Only retry on rate limiting errors (429)
+              if (error instanceof HttpErrorResponse && error.status === 429 && retryAttempt <= (config.maxRetries || 3)) {
+                console.log(`Rate limit exceeded. Retrying in ${(config.retryDelay || 1000) * retryAttempt}ms (Attempt ${retryAttempt})`);
+                
+                // Use exponential backoff for retries
+                return timer((config.retryDelay || 1000) * Math.pow(2, retryAttempt - 1));
+              }
+              
+              // If it's not a rate limiting error or we've exceeded max retries, throw the error
+              return throwError(() => error);
+            }),
+            finalize(() => console.log('Retry logic completed'))
+          )
+        ),
         catchError(error => {
+          if (error instanceof HttpErrorResponse) {
+            // Handle specific HTTP errors
+            switch (error.status) {
+              case 429:
+                console.error('OpenAI API rate limit exceeded. Please try again later.');
+                return throwError(() => new Error(`Failed to get response from ${serviceName}: Rate limit exceeded. Please try again later.`));
+              case 401:
+                console.error('Authentication error. Please check your API key.');
+                return throwError(() => new Error(`Failed to get response from ${serviceName}: Authentication error. Please check your API key.`));
+              case 400:
+                console.error('Bad request:', error.error);
+                return throwError(() => new Error(`Failed to get response from ${serviceName}: Bad request - ${error.error?.error?.message || error.message}`));
+              case 500:
+              case 502:
+              case 503:
+              case 504:
+                console.error('OpenAI API server error:', error.status);
+                return throwError(() => new Error(`Failed to get response from ${serviceName}: Server error (${error.status}). Please try again later.`));
+              default:
+                console.error(`Error calling ${serviceName} API:`, error);
+                return throwError(() => new Error(`Failed to get response from ${serviceName}: ${error.message}`));
+            }
+          }
+          
           console.error(`Error calling ${serviceName} API:`, error);
           return throwError(() => new Error(`Failed to get response from ${serviceName}: ${error.message}`));
         }),
-        // Map the response to a standardized format
-        // Each service will need its own response mapping
-        (response: any) => this.mapResponse(serviceName, response)
+        map(response => {
+          try {
+            return this.processResponse(serviceName, response);
+          } catch (error: any) {
+            console.error(`Error processing ${serviceName} response:`, error);
+            throw new Error(`Failed to parse ${serviceName} response: ${error.message}`);
+          }
+        })
       );
   }
 
@@ -90,27 +146,40 @@ export class AIService {
   }
 
   /**
-   * Map the response from various AI services to a standardized format
+   * Process the response from various AI services
    */
-  private mapResponse(serviceName: string, response: any): Observable<AIResponse> {
+  private processResponse(serviceName: string, response: any): AIResponse {
+    console.log(`Processing ${serviceName} response:`, JSON.stringify(response));
+    
     switch (serviceName) {
       case 'openai':
-        return new Observable<AIResponse>(observer => {
-          try {
-            const content = response.choices[0]?.message?.content || '';
-            observer.next({
-              content,
-              source: 'openai',
-              raw: response
-            });
-            observer.complete();
-          } catch (error) {
-            observer.error(new Error(`Failed to parse OpenAI response: ${error}`));
-          }
-        });
+        if (!response) {
+          throw new Error('Empty response received from OpenAI');
+        }
+        
+        if (!response.choices || !Array.isArray(response.choices) || response.choices.length === 0) {
+          throw new Error(`Invalid response format from OpenAI: missing or empty 'choices' array`);
+        }
+        
+        const choice = response.choices[0];
+        if (!choice.message) {
+          throw new Error(`Invalid response format from OpenAI: missing 'message' in first choice`);
+        }
+        
+        const content = choice.message.content;
+        if (typeof content !== 'string') {
+          throw new Error(`Invalid response format from OpenAI: 'content' is not a string`);
+        }
+        
+        return {
+          content,
+          source: 'openai',
+          raw: response
+        };
+      
       // Add cases for other AI services as needed
       default:
-        return throwError(() => new Error(`Unknown AI service: ${serviceName}`));
+        throw new Error(`Unknown AI service: ${serviceName}`);
     }
   }
 }

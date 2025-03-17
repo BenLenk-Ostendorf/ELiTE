@@ -1,22 +1,40 @@
-<p>exam-form works!</p>
-
 <div class="exam-form-container">
   <form class="exam-form" (ngSubmit)="rateYourself()">
     <div class="form-group">
       <label for="examQuestion">Exam Question:</label>
-      <textarea id="examQuestion" rows="4" class="form-control" placeholder="Enter your exam question here..." [(ngModel)]="examQuestion" name="examQuestion"></textarea>
+      <textarea 
+        id="examQuestion" 
+        rows="4" 
+        class="form-control" 
+        placeholder="Enter your exam question here..." 
+        [(ngModel)]="examQuestion" 
+        name="examQuestion"
+        [readonly]="isSubmitted"
+        [class.readonly]="isSubmitted"></textarea>
     </div>
     
     <div class="button-group">
-      <button type="submit" class="btn btn-primary" [disabled]="isLoading">
-        <span *ngIf="!isLoading">Rate yourself</span>
-        <span *ngIf="isLoading">Processing...</span>
+      <button 
+        type="submit" 
+        class="btn btn-primary" 
+        [disabled]="isLoading || (isSubmitted && aiResponse)">
+        <span *ngIf="!isLoading && !isSubmitted">Rate yourself</span>
+        <span *ngIf="isLoading && !errorMessage.includes('Retrying')">Processing...</span>
+        <span *ngIf="isLoading && errorMessage.includes('Retrying')">Retrying...</span>
+        <span *ngIf="!isLoading && isSubmitted && aiResponse">Rated</span>
       </button>
       <button type="button" class="btn btn-secondary" disabled>Multiple choice</button>
       <button type="button" class="btn btn-secondary" disabled>Keyword check</button>
+      <button 
+        *ngIf="isSubmitted && (aiResponse || (!isLoading && errorMessage))" 
+        type="button" 
+        class="btn btn-outline-primary" 
+        (click)="resetForm()">
+        New Question
+      </button>
     </div>
     
-    <div *ngIf="errorMessage" class="error-message mt-3">
+    <div *ngIf="errorMessage" class="error-message mt-3" [class.rate-limit-error]="errorMessage.includes('Rate limit')">
       {{ errorMessage }}
     </div>
     

@@ -1,0 +1,38 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.init-error-container {
+  margin: 20px auto;
+  max-width: 800px;
+}
+
+.init-error {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 20px;
+  border: 1px solid #f5c6cb;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  
+  h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #721c24;
+  }
+  
+  .help-text {
+    margin-top: 15px;
+    font-style: italic;
+    font-size: 0.9em;
+  }
+}
+
+.loading-container {
+  text-align: center;
+  padding: 40px;
+  font-size: 18px;
+  color: #6c757d;
+}
